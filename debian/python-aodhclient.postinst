@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" = "configure" ] ; then
+	update-alternatives --install /usr/bin/aodh aodh /usr/bin/python2-aodh 300
+fi
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+
+PYTHONS:=$(shell pyversions -vr)
+PYTHON3S:=$(shell py3versions -vr)
+
+MANIFEST_EXCLUDE_STANDARD := aodhclient
+
+include /usr/share/openstack-pkg-tools/pkgos.make
+
+export OSLO_PACKAGE_VERSION=$(VERSION)
+
+%:
+	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
+
+override_dh_install:
+	set -e ; for pyvers in $(PYTHONS); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python-aodhclient; \
+	done
+	set -e ; for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-aodhclient; \
+	done
+	mv $(CURDIR)/debian/python-aodhclient/usr/bin/aodh $(CURDIR)/debian/python-aodhclient/usr/bin/python2-aodh
+	mv $(CURDIR)/debian/python3-aodhclient/usr/bin/aodh $(CURDIR)/debian/python3-aodhclient/usr/bin/python3-aodh
+
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	@echo "===> Running tests"
+	set -e ; set -x ; for i in 2.7 $(PYTHON3S) ; do \
+		PYMAJOR=`echo $$i | cut -d'.' -f1` ; \
+		echo "===> Testing with python$$i (python$$PYMAJOR)" ; \
+		rm -rf .testrepository ; \
+		testr-python$$PYMAJOR init ; \
+		TEMP_REZ=`mktemp -t` ; \
+		PYTHONPATH=$(CURDIR) PYTHON=python$$i testr-python$$PYMAJOR run --subunit 'aodhclient\.tests\.unit\.(?!.*test_client.ClientAuthTest\.test_discover_auth_versions.*)' | tee $$TEMP_REZ | subunit2pyunit ; \
+		cat $$TEMP_REZ | subunit-filter -s --no-passthrough | subunit-stats ; \
+		rm -f $$TEMP_REZ ; \
+		testr-python$$PYMAJOR slowest ; \
+	done
+endif
+
+override_dh_sphinxdoc:
+ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
+	sphinx-build -b html doc/source $(CURDIR)/debian/python-aodhclient-doc/usr/share/doc/python-aodhclient-doc/html
+	dh_sphinxdoc -O--buildsystem=python_distutils
+endif
+
+override_dh_clean:
+	dh_clean -O--buildsystem=python_distutils
+	rm -rf .testrepository
+	rm -rf doc/man
+
+override_dh_installman:
+#ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
+#	sphinx-build -b man doc/source doc/man
+#	mv doc/man/python-aodhclient.1 doc/man/aodh.1
+#	sed -i s/python-aodhclient/python-aodhclient/ doc/man/aodh.1
+#	dh_installman -O--buildsystem=python_distutils
+#endif
