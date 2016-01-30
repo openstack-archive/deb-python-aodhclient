@@ -1,4 +1,4 @@
-python-aodhclient (0.1.0-1) UNRELEASED; urgency=medium
+python-aodhclient (0.1.0-1) experimental; urgency=medium
 
   * Initial release. (Closes: #813198)
 
