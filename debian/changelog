@@ -1,4 +1,4 @@
-python-aodhclient (0.3.0-1) UNRELEASED; urgency=medium
+python-aodhclient (0.3.0-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Fixed VCS URLs (https).
@@ -7,7 +7,10 @@ python-aodhclient (0.3.0-1) UNRELEASED; urgency=medium
   * New upstream release.
   * d/control: Align (Build-)Depends with upstream.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Wed, 02 Mar 2016 09:38:34 -0500
+  [ Thomas Goirand ]
+  * Standards-Version: 3.9.7 (no change).
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 03 Mar 2016 03:19:22 +0000
 
 python-aodhclient (0.1.0-1) experimental; urgency=medium
 
