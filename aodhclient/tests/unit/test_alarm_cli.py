@@ -38,16 +38,16 @@ class CliAlarmCreateTest(testtools.TestCase):
         test_parsed_args = parser.parse_args([
             '--name', 'gnocchi_resources_threshold_test',
             '--type', 'gnocchi_resources_threshold',
-            '--metric', 'cpu'
-            '--aggregation_method', 'last',
-            '--resource_type', 'generic',
+            '--metric', 'cpu',
+            '--aggregation-method', 'last',
+            '--resource-type', 'generic',
             '--threshold', '80'
             ])
         self.cli_alarm_create._validate_args(test_parsed_args)
-        mock_arg.assert_called_with(
-            'gnocchi_resources_threshold requires --metric'
-            ', --threshold, --resource-id, --resource-type '
-            'and --aggregation-method')
+        mock_arg.assert_called_once_with(
+            'gnocchi_resources_threshold requires --metric, '
+            '--threshold, --resource-id, --resource-type and '
+            '--aggregation-method')
 
     @mock.patch.object(argparse.ArgumentParser, 'error')
     def test_validate_args_threshold(self, mock_arg):
@@ -60,7 +60,7 @@ class CliAlarmCreateTest(testtools.TestCase):
             '--threshold', '80'
             ])
         self.cli_alarm_create._validate_args(test_parsed_args)
-        mock_arg.assert_called_with(
+        mock_arg.assert_called_once_with(
             'threshold alarm requires -m/--meter-name and '
             '--threshold parameters')
 
@@ -73,16 +73,15 @@ class CliAlarmCreateTest(testtools.TestCase):
             '--name', 'gnocchi_aggregation_by_resources_threshold_test',
             '--type', 'gnocchi_aggregation_by_resources_threshold',
             '--metric', 'cpu',
-            '--aggregation_method', 'last',
-            '--resource_type', 'generic',
+            '--aggregation-method', 'last',
+            '--resource-type', 'generic',
             '--threshold', '80'
             ])
         self.cli_alarm_create._validate_args(test_parsed_args)
-        mock_arg.assert_called_with(
-            'gnocchi_aggregation_by_resources_threshold'
-            ' requires --metric, --threshold, '
-            '--aggregation-method, --query and'
-            ' --resource_type')
+        mock_arg.assert_called_once_with(
+            'gnocchi_aggregation_by_resources_threshold requires '
+            '--metric, --threshold, --aggregation-method, --query and '
+            '--resource-type')
 
     @mock.patch.object(argparse.ArgumentParser, 'error')
     def test_validate_args_gno_agg_by_metrics_threshold(self, mock_arg):
@@ -92,14 +91,13 @@ class CliAlarmCreateTest(testtools.TestCase):
         test_parsed_args = parser.parse_args([
             '--name', 'gnocchi_aggregation_by_metrics_threshold_test',
             '--type', 'gnocchi_aggregation_by_metrics_threshold',
-            '--resource_type', 'generic',
+            '--resource-type', 'generic',
             '--threshold', '80'
             ])
         self.cli_alarm_create._validate_args(test_parsed_args)
-        mock_arg.assert_called_with(
-            'gnocchi_aggregation_by_metrics_threshold'
-            ' requires --metrics, --threshold and '
-            '--aggregation-method')
+        mock_arg.assert_called_once_with(
+            'gnocchi_aggregation_by_metrics_threshold requires '
+            '--metrics, --threshold and --aggregation-method')
 
     def test_alarm_from_args(self):
         # The test case to cover the method _alarm_from_args
@@ -118,7 +116,8 @@ class CliAlarmCreateTest(testtools.TestCase):
             '--repeat-action', 'True',
             '--insufficient-data-action',
             'http://something/insufficient',
-            '--time-constraint', '',
+            '--time-constraint',
+            'name=cons1;start="0 11 * * *";duration=300;description=desc1',
             '--meter-name', 'cpu',
             '--period', '60',
             '--evaluation-periods', '60',
@@ -126,7 +125,7 @@ class CliAlarmCreateTest(testtools.TestCase):
             '--comparison-operator', 'le',
             '--threshold', '80',
             '--event-type', 'event',
-            '--query', '{}',
+            '--query', 'resource=fake-resource-id',
             '--granularity', '60',
             '--aggregation-method', 'last',
             '--metric', 'cpu',
@@ -147,7 +146,10 @@ class CliAlarmCreateTest(testtools.TestCase):
             'ok_actions': ['http://something/ok'],
             'insufficient_data_actions':
                 ['http://something/insufficient'],
-            'time_constraints': [''],
+            'time_constraints': [{'description': 'desc1',
+                                  'duration': '300',
+                                  'name': 'cons1',
+                                  'start': '0 11 * * *'}],
             'repeat_actions': True,
             'threshold_rule': {
                 'meter_name': 'cpu',
@@ -156,12 +158,18 @@ class CliAlarmCreateTest(testtools.TestCase):
                 'statistic': 'max',
                 'comparison_operator': 'le',
                 'threshold': 80.0,
-                'query': '{}'
-                },
+                'query': [{'field': 'resource',
+                           'op': 'eq',
+                           'type': '',
+                           'value': 'fake-resource-id'}]
+            },
             'event_rule': {
                 'event_type': 'event',
-                'query': '{}'
-                },
+                'query': [{'field': 'resource',
+                           'op': 'eq',
+                           'type': '',
+                           'value': 'fake-resource-id'}]
+            },
             'gnocchi_resources_threshold_rule': {
                 'granularity': '60',
                 'metric': 'cpu',
@@ -171,14 +179,14 @@ class CliAlarmCreateTest(testtools.TestCase):
                 'comparison_operator': 'le',
                 'threshold': 80.0,
                 'resource_type': 'generic'
-                },
+            },
             'gnocchi_aggregation_by_metrics_threshold_rule': {
                 'granularity': '60',
                 'aggregation_method': 'last',
                 'evaluation_periods': 60,
                 'comparison_operator': 'le',
                 'threshold': 80.0
-                },
+            },
             'gnocchi_aggregation_by_resources_threshold_rule': {
                 'granularity': '60',
                 'metric': 'cpu',
@@ -186,11 +194,32 @@ class CliAlarmCreateTest(testtools.TestCase):
                 'evaluation_periods': 60,
                 'comparison_operator': 'le',
                 'threshold': 80.0,
-                'query': '{}',
+                'query': [{'field': 'resource',
+                           'op': 'eq',
+                           'type': '',
+                           'value': 'fake-resource-id'}],
                 'resource_type': 'generic'
-                },
+            },
             'composite_rule': None,
             'type': 'threshold'
             }
         alarm_rep = self.cli_alarm_create._alarm_from_args(test_parsed_args)
         self.assertEqual(alarm, alarm_rep)
+
+    def test_validate_time_constraint(self):
+        starts = ['0 11 * * *', ' 0 11 * * * ',
+                  '"0 11 * * *"', '\'0 11 * * *\'']
+        for start in starts:
+            string = 'name=const1;start=%s;duration=1' % start
+            expected = dict(name='const1',
+                            start='0 11 * * *',
+                            duration='1')
+            self.assertEqual(
+                expected,
+                self.cli_alarm_create.validate_time_constraint(string))
+
+    def test_validate_time_constraint_with_bad_format(self):
+        string = 'name=const2;start="0 11 * * *";duration:2'
+        self.assertRaises(argparse.ArgumentTypeError,
+                          self.cli_alarm_create.validate_time_constraint,
+                          string)

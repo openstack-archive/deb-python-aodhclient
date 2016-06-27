@@ -13,6 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from __future__ import print_function
+
 import logging
 import os
 import sys
@@ -37,7 +39,6 @@ class AodhCommandManager(commandmanager.CommandManager):
         "alarm delete": alarm_cli.CliAlarmDelete,
         "alarm list": alarm_cli.CliAlarmList,
         "alarm show": alarm_cli.CliAlarmShow,
-        "alarm search": alarm_cli.CliAlarmSearch,
         "alarm update": alarm_cli.CliAlarmUpdate,
         "alarm-history show": alarm_history_cli.CliAlarmHistoryShow,
         "alarm-history search": alarm_history_cli.CliAlarmHistorySearch,
@@ -130,13 +131,8 @@ class AodhShell(app.App):
         return self._client
 
     def clean_up(self, cmd, result, err):
-        if err and isinstance(err, exceptions.HttpError):
-            try:
-                error = err.response.json()
-            except Exception:
-                pass
-            else:
-                print(error['description'])
+        if isinstance(err, exceptions.HttpError) and err.details:
+            print(err.details, file=sys.stderr)
 
     def configure_logging(self):
         if self.options.debug:

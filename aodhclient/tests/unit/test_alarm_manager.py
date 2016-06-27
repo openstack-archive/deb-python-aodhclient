@@ -43,9 +43,31 @@ class AlarmManagerTest(testtools.TestCase):
     @mock.patch.object(alarm.AlarmManager, '_get')
     def test_list(self, mock_am):
         am = alarm.AlarmManager(self.client)
-        am.list('event')
+        am.list()
+        mock_am.assert_called_with('v2/alarms')
+
+    @mock.patch.object(alarm.AlarmManager, '_post')
+    def test_list_with_query(self, mock_am):
+        am = alarm.AlarmManager(self.client)
+        query = '{"=": {"type": "event"}}'
+        am.list(query)
+        url = 'v2/query/alarms'
+        expected_value = ('{"filter": "{\\"=\\": {\\"type\\":'
+                          ' \\"event\\"}}"}')
+        headers_value = {'Content-Type': "application/json"}
         mock_am.assert_called_with(
-            'v2/alarms?q.field=type&q.op=eq&q.value=event')
+            url,
+            data=expected_value,
+            headers=headers_value)
+
+    @mock.patch.object(alarm.AlarmManager, '_get')
+    def test_list_with_filters(self, mock_am):
+        am = alarm.AlarmManager(self.client)
+        filters = dict(type='threshold', severity='low')
+        am.list(filters=filters)
+        expected_url = ("v2/alarms?q.field=severity&q.op=eq&q.value=low&"
+                        "q.field=type&q.op=eq&q.value=threshold")
+        mock_am.assert_called_with(expected_url)
 
     @mock.patch.object(alarm.AlarmManager, '_get')
     def test_get(self, mock_am):
@@ -69,17 +91,3 @@ class AlarmManagerTest(testtools.TestCase):
         alarm_value.pop('name')
         result = self.results.get("result1")
         self.assertEqual(alarm_value, result)
-
-    @mock.patch.object(alarm.AlarmManager, '_post')
-    def test_search(self, mock_am):
-        am = alarm.AlarmManager(self.client)
-        query = '{"=": {"type": "event"}}'
-        am.search(query)
-        url = 'v2/query/alarms'
-        expected_value = ('{"filter": "{\\"=\\": {\\"type\\":'
-                          ' \\"event\\"}}"}')
-        headers_value = {'Content-Type': "application/json"}
-        mock_am.assert_called_with(
-            url,
-            data=expected_value,
-            headers=headers_value)
