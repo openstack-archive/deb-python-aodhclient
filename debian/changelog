@@ -6,6 +6,7 @@ python-aodhclient (0.5.0-1) UNRELEASED; urgency=medium
 
   [ Corey Bryant ]
   * New upstream release.
+  * d/control: Align (Build-)Depends with upstream.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Mon, 27 Jun 2016 08:28:49 -0400
 
