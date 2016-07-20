@@ -8,6 +8,7 @@ python-aodhclient (0.5.0-1) UNRELEASED; urgency=medium
   * New upstream release.
   * d/control: Align (Build-)Depends with upstream.
   * d/gbp.conf: Update debian-branch for Newton.
+  * d/tests/*: Test python2-aodh and python3-aodh clients and exit on error.
 
  -- Corey Bryant <corey.bryant@canonical.com>  Mon, 27 Jun 2016 08:28:49 -0400
 

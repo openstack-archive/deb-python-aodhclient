@@ -4,11 +4,14 @@
 #-------------------------
 set -e
 
-HELP_CLIENTS=('aodh')
+HELP_CLIENTS=('python2-aodh' 'python3-aodh')
 for client in "${HELP_CLIENTS[@]}"; do
     RET=$($client -h 2>&1 > /dev/null)
 
     if [[ $RET ]]; then
-        echo "ERROR, ${client} is not running"
+        echo "ERROR, ${client} is not running" >&2
+        exit 1
+    else
+        echo "OK: ${client} ran"
     fi
 done

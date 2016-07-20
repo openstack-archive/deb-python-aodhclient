@@ -1,2 +1,2 @@
 Tests: client
-Depends: python-aodhclient
+Depends: python-aodhclient, python3-aodhclient
