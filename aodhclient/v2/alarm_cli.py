@@ -18,6 +18,7 @@ from cliff import lister
 from cliff import show
 from oslo_serialization import jsonutils
 from oslo_utils import strutils
+from oslo_utils import uuidutils
 
 from aodhclient import exceptions
 from aodhclient.i18n import _
@@ -30,6 +31,7 @@ ALARM_TYPES = ['threshold', 'event', 'composite',
 ALARM_STATES = ['ok', 'alarm', 'insufficient data']
 ALARM_SEVERITY = ['low', 'moderate', 'critical']
 ALARM_OPERATORS = ['lt', 'le', 'eq', 'ne', 'ge', 'gt']
+ALARM_OP_MAP = dict(zip(ALARM_OPERATORS, ('<', '<=', '=', '!=', '>=', '>')))
 STATISTICS = ['max', 'min', 'avg', 'sum', 'count']
 
 ALARM_LIST_COLS = ['alarm_id', 'type', 'name', 'state', 'severity', 'enabled']
@@ -59,17 +61,33 @@ class CliAlarmList(lister.Lister):
                                      action='append',
                                      help='Filter parameters to apply on'
                                           ' returned alarms.')
+        parser.add_argument("--limit", type=int, metavar="<LIMIT>",
+                            help="Number of resources to return "
+                                 "(Default is server default)")
+        parser.add_argument("--marker", metavar="<MARKER>",
+                            help="Last item of the previous listing. "
+                                 "Return the next results after this value,"
+                                 "the supported marker is alarm_id.")
+        parser.add_argument("--sort", action="append",
+                            metavar="<SORT_KEY:SORT_DIR>",
+                            help="Sort of resource attribute, "
+                                 "e.g. name:asc")
         return parser
 
     def take_action(self, parsed_args):
         if parsed_args.query:
+            if any([parsed_args.limit, parsed_args.sort, parsed_args.marker]):
+                raise exceptions.CommandError(
+                    "Query and pagination options are mutually "
+                    "exclusive.")
             query = jsonutils.dumps(
                 utils.search_query_builder(parsed_args.query))
+            alarms = utils.get_client(self).alarm.query(query=query)
         else:
-            query = None
-        filters = dict(parsed_args.filter) if parsed_args.filter else None
-        alarms = utils.get_client(self).alarm.list(query=query,
-                                                   filters=filters)
+            filters = dict(parsed_args.filter) if parsed_args.filter else None
+            alarms = utils.get_client(self).alarm.list(
+                filters=filters, sorts=parsed_args.sort,
+                limit=parsed_args.limit, marker=parsed_args.marker)
         return utils.list2cols(ALARM_LIST_COLS, alarms)
 
 
@@ -85,46 +103,68 @@ def _format_alarm(alarm):
         alarm["time_constraints"] = jsonutils.dumps(alarm["time_constraints"],
                                                     sort_keys=True,
                                                     indent=2)
+    # only works for threshold and event alarm
+    if isinstance(alarm.get('query'), list):
+        query_rows = []
+        for q in alarm['query']:
+            op = ALARM_OP_MAP.get(q['op'], q['op'])
+            query_rows.append('%s %s %s' % (q['field'], op, q['value']))
+        alarm['query'] = ' AND\n'.join(query_rows)
     return alarm
 
 
-def _find_alarm_by_name(client, name, return_id=False):
+def _find_alarm_by_name(client, name):
     # then try to get entity as name
     query = jsonutils.dumps({"=": {"name": name}})
-    alarms = client.list(query)
+    alarms = client.alarm.query(query)
     if len(alarms) > 1:
         msg = (_("Multiple alarms matches found for '%s', "
                  "use an ID to be more specific.") % name)
         raise exceptions.NoUniqueMatch(msg)
     elif not alarms:
         msg = (_("Alarm %s not found") % name)
-        raise exceptions.NotFound(404, msg)
+        raise exceptions.NotFound(msg)
     else:
-        if return_id:
-            return alarms[0]['alarm_id']
         return alarms[0]
 
 
-def _check_name_and_id(parsed_args, action):
-    if parsed_args.id and parsed_args.alarm_name:
+def _find_alarm_id_by_name(client, name):
+    alarm = _find_alarm_by_name(client, name)
+    return alarm['alarm_id']
+
+
+def _check_name_and_id_coexist(parsed_args, action):
+    if parsed_args.id and parsed_args.name:
         raise exceptions.CommandError(
             "You should provide only one of "
-            "alarm ID and alarm name(--alarm-name) "
+            "alarm ID and alarm name(--name) "
             "to %s an alarm." % action)
-    if not parsed_args.id and not parsed_args.alarm_name:
+
+
+def _check_name_and_id_exist(parsed_args, action):
+    if not parsed_args.id and not parsed_args.name:
         msg = (_("You need to specify one of "
-                 "alarm ID and alarm name(--alarm-name) "
+                 "alarm ID and alarm name(--name) "
                  "to %s an alarm.") % action)
         raise exceptions.CommandError(msg)
 
 
-def _add_name_and_id(parser):
+def _check_name_and_id(parsed_args, action):
+    _check_name_and_id_coexist(parsed_args, action)
+    _check_name_and_id_exist(parsed_args, action)
+
+
+def _add_name_to_parser(parser, required=False):
+    parser.add_argument('--name', metavar='<NAME>',
+                        required=required,
+                        help='Name of the alarm')
+    return parser
+
+
+def _add_id_to_parser(parser):
     parser.add_argument("id", nargs='?',
-                        metavar='<ALARM ID>',
-                        help="ID of an alarm.")
-    parser.add_argument("--alarm-name", dest='alarm_name',
-                        metavar='<ALARM NAME>',
-                        help="Name of an alarm.")
+                        metavar='<ALARM ID or NAME>',
+                        help="ID or name of an alarm.")
     return parser
 
 
@@ -132,16 +172,25 @@ class CliAlarmShow(show.ShowOne):
     """Show an alarm"""
 
     def get_parser(self, prog_name):
-        parser = super(CliAlarmShow, self).get_parser(prog_name)
-        return _add_name_and_id(parser)
+        return _add_name_to_parser(
+            _add_id_to_parser(
+                super(CliAlarmShow, self).get_parser(prog_name)))
 
     def take_action(self, parsed_args):
         _check_name_and_id(parsed_args, 'query')
-        if parsed_args.id:
-            alarm = utils.get_client(self).alarm.get(alarm_id=parsed_args.id)
+        c = utils.get_client(self)
+        if parsed_args.name:
+            alarm = _find_alarm_by_name(c, parsed_args.name)
         else:
-            alarm = _find_alarm_by_name(utils.get_client(self).alarm,
-                                        parsed_args.alarm_name)
+            if uuidutils.is_uuid_like(parsed_args.id):
+                try:
+                    alarm = c.alarm.get(alarm_id=parsed_args.id)
+                except exceptions.NotFound:
+                    # Maybe it's a name
+                    alarm = _find_alarm_by_name(c, parsed_args.id)
+            else:
+                alarm = _find_alarm_by_name(c, parsed_args.id)
+
         return self.dict2columns(_format_alarm(alarm))
 
 
@@ -151,12 +200,15 @@ class CliAlarmCreate(show.ShowOne):
     create = True
 
     def get_parser(self, prog_name):
-        parser = super(CliAlarmCreate, self).get_parser(prog_name)
+        parser = _add_name_to_parser(
+            super(CliAlarmCreate, self).get_parser(prog_name),
+            required=self.create)
+
         parser.add_argument('-t', '--type', metavar='<TYPE>',
                             required=self.create,
-                            choices=ALARM_TYPES, help='Type of alarm')
-        parser.add_argument('--name', metavar='<NAME>', required=self.create,
-                            help='Name of the alarm')
+                            choices=ALARM_TYPES,
+                            help='Type of alarm, should be one of: '
+                                 '%s.' % ', '.join(ALARM_TYPES))
         parser.add_argument('--project-id', metavar='<PROJECT_ID>',
                             help='Project to associate with alarm '
                                  '(configurable by admin users only)')
@@ -284,11 +336,11 @@ class CliAlarmCreate(show.ShowOne):
             '--composite-rule', metavar='<COMPOSITE_RULE>',
             dest='composite_rule',
             type=jsonutils.loads,
-            help='Composite threshold rule with JSON format, the form can'
-                 'be a nested dict which combine threshold/gnocchi rules by'
-                 ' "and", "or". For example, the form is like: '
-                 '{"or":[RULE1, RULE2, {"and": [RULE3, RULE4]}]}, The'
-                 'RULEx can be basic threshold rules but must include a'
+            help='Composite threshold rule with JSON format, the form can '
+                 'be a nested dict which combine threshold/gnocchi rules by '
+                 '"and", "or". For example, the form is like: '
+                 '{"or":[RULE1, RULE2, {"and": [RULE3, RULE4]}]}, The '
+                 'RULEx can be basic threshold rules but must include a '
                  '"type" field, like this: {"threshold": 0.8,'
                  '"meter_name":"cpu_util","type":"threshold"}'
         )
@@ -311,8 +363,9 @@ class CliAlarmCreate(show.ShowOne):
     def _validate_args(self, parsed_args):
         if (parsed_args.type == 'threshold' and
                 not (parsed_args.meter_name and parsed_args.threshold)):
-            self.parser.error('threshold alarm requires -m/--meter-name and '
-                              '--threshold parameters')
+            self.parser.error('Threshold alarm requires -m/--meter-name and '
+                              '--threshold parameters. Meter name can be '
+                              'found in Ceilometer')
         elif (parsed_args.type == 'gnocchi_resources_threshold' and
               not (parsed_args.metric and parsed_args.threshold and
                    parsed_args.resource_id and parsed_args.resource_type
@@ -336,7 +389,7 @@ class CliAlarmCreate(show.ShowOne):
                               '--resource-type')
         elif (parsed_args.type == 'composite' and
               not parsed_args.composite_rule):
-            self.parser.error('composite alarm requires'
+            self.parser.error('Composite alarm requires'
                               ' --composite-rule parameter')
 
     def _alarm_from_args(self, parsed_args):
@@ -389,37 +442,117 @@ class CliAlarmUpdate(CliAlarmCreate):
     create = False
 
     def get_parser(self, prog_name):
-        parser = super(CliAlarmUpdate, self).get_parser(prog_name)
-        return _add_name_and_id(parser)
+        return _add_id_to_parser(
+            super(CliAlarmUpdate, self).get_parser(prog_name))
 
     def take_action(self, parsed_args):
-        _check_name_and_id(parsed_args, 'update')
         attributes = self._alarm_from_args(parsed_args)
-        if parsed_args.id:
-            updated_alarm = utils.get_client(self).alarm.update(
-                alarm_id=parsed_args.id, alarm_update=attributes)
+        _check_name_and_id_exist(parsed_args, 'update')
+        c = utils.get_client(self)
+
+        if uuidutils.is_uuid_like(parsed_args.id):
+            try:
+                alarm = c.alarm.update(alarm_id=parsed_args.id,
+                                       alarm_update=attributes)
+            except exceptions.NotFound:
+                # Maybe it was not an ID but a name, damn
+                _id = _find_alarm_id_by_name(c, parsed_args.id)
+            else:
+                return self.dict2columns(_format_alarm(alarm))
+        elif parsed_args.id:
+            _id = _find_alarm_id_by_name(c, parsed_args.id)
         else:
-            alarm_id = _find_alarm_by_name(utils.get_client(self).alarm,
-                                           parsed_args.alarm_name,
-                                           return_id=True)
-            updated_alarm = utils.get_client(self).alarm.update(
-                alarm_id=alarm_id, alarm_update=attributes)
-        return self.dict2columns(_format_alarm(updated_alarm))
+            _id = _find_alarm_id_by_name(c, parsed_args.name)
+
+        alarm = c.alarm.update(alarm_id=_id, alarm_update=attributes)
+        return self.dict2columns(_format_alarm(alarm))
 
 
 class CliAlarmDelete(command.Command):
     """Delete an alarm"""
 
     def get_parser(self, prog_name):
-        parser = super(CliAlarmDelete, self).get_parser(prog_name)
-        return _add_name_and_id(parser)
+        return _add_name_to_parser(
+            _add_id_to_parser(
+                super(CliAlarmDelete, self).get_parser(prog_name)))
 
     def take_action(self, parsed_args):
         _check_name_and_id(parsed_args, 'delete')
-        if parsed_args.id:
-            utils.get_client(self).alarm.delete(parsed_args.id)
+        c = utils.get_client(self)
+
+        if parsed_args.name:
+            _id = _find_alarm_id_by_name(c, parsed_args.name)
+        elif uuidutils.is_uuid_like(parsed_args.id):
+            try:
+                return c.alarm.delete(parsed_args.id)
+            except exceptions.NotFound:
+                # Maybe it was not an ID after all
+                _id = _find_alarm_id_by_name(c, parsed_args.id)
         else:
-            alarm_id = _find_alarm_by_name(utils.get_client(self).alarm,
-                                           parsed_args.alarm_name,
-                                           return_id=True)
-            utils.get_client(self).alarm.delete(alarm_id)
+            _id = _find_alarm_id_by_name(c, parsed_args.id)
+
+        c.alarm.delete(_id)
+
+
+class CliAlarmStateGet(show.ShowOne):
+    """Delete an alarm"""
+
+    def get_parser(self, prog_name):
+        return _add_name_to_parser(
+            _add_id_to_parser(
+                super(CliAlarmStateGet, self).get_parser(prog_name)))
+
+    def take_action(self, parsed_args):
+        _check_name_and_id(parsed_args, 'get state of')
+        c = utils.get_client(self)
+
+        if parsed_args.name:
+            _id = _find_alarm_id_by_name(c, parsed_args.name)
+        elif uuidutils.is_uuid_like(parsed_args.id):
+            try:
+                state = c.alarm.get_state(parsed_args.id)
+            except exceptions.NotFound:
+                # Maybe it was not an ID after all
+                _id = _find_alarm_id_by_name(c, parsed_args.id)
+            else:
+                return self.dict2columns({'state': state})
+        else:
+            _id = _find_alarm_id_by_name(c, parsed_args.id)
+
+        state = c.alarm.get_state(_id)
+        return self.dict2columns({'state': state})
+
+
+class CliAlarmStateSet(show.ShowOne):
+    """Delete an alarm"""
+
+    def get_parser(self, prog_name):
+        parser = _add_name_to_parser(
+            _add_id_to_parser(
+                super(CliAlarmStateSet, self).get_parser(prog_name)))
+        parser.add_argument('--state', metavar='<STATE>',
+                            required=True,
+                            choices=ALARM_STATES,
+                            help='State of the alarm, one of: '
+                            + str(ALARM_STATES))
+        return parser
+
+    def take_action(self, parsed_args):
+        _check_name_and_id(parsed_args, 'set state of')
+        c = utils.get_client(self)
+
+        if parsed_args.name:
+            _id = _find_alarm_id_by_name(c, parsed_args.name)
+        elif uuidutils.is_uuid_like(parsed_args.id):
+            try:
+                state = c.alarm.set_state(parsed_args.id, parsed_args.state)
+            except exceptions.NotFound:
+                # Maybe it was not an ID after all
+                _id = _find_alarm_id_by_name(c, parsed_args.id)
+            else:
+                return self.dict2columns({'state': state})
+        else:
+            _id = _find_alarm_id_by_name(c, parsed_args.id)
+
+        state = c.alarm.set_state(_id, parsed_args.state)
+        return self.dict2columns({'state': state})

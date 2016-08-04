@@ -29,6 +29,70 @@ class AodhClientTest(base.ClientTestBase):
         self.aodh("help", params="alarm show")
         self.aodh("help", params="alarm update")
 
+    def test_alarm_id_or_name_scenario(self):
+        def _test(name):
+            params = "create --type event --name %s" % name
+            result = self.aodh('alarm', params=params)
+            alarm_id = self.details_multiple(result)[0]['alarm_id']
+
+            params = 'show %s' % name
+            result = self.aodh('alarm', params=params)
+            self.assertEqual(alarm_id,
+                             self.details_multiple(result)[0]['alarm_id'])
+
+            params = 'show %s' % alarm_id
+            result = self.aodh('alarm', params=params)
+            self.assertEqual(alarm_id,
+                             self.details_multiple(result)[0]['alarm_id'])
+
+            params = "update --state ok %s" % name
+            result = self.aodh('alarm', params=params)
+            self.assertEqual("ok", self.details_multiple(result)[0]['state'])
+
+            params = "update --state alarm %s" % alarm_id
+            result = self.aodh('alarm', params=params)
+            self.assertEqual("alarm",
+                             self.details_multiple(result)[0]['state'])
+
+            params = "update --name another-name %s" % name
+            result = self.aodh('alarm', params=params)
+            self.assertEqual("another-name",
+                             self.details_multiple(result)[0]['name'])
+
+            params = "update --name %s %s" % (name, alarm_id)
+            result = self.aodh('alarm', params=params)
+            self.assertEqual(name,
+                             self.details_multiple(result)[0]['name'])
+
+            # Check update with no change is allowed
+            params = "update --name %s %s" % (name, name)
+            result = self.aodh('alarm', params=params)
+            self.assertEqual(name,
+                             self.details_multiple(result)[0]['name'])
+
+            params = "update --state ok"
+            result = self.aodh('alarm', params=params,
+                               fail_ok=True, merge_stderr=True)
+            self.assertFirstLineStartsWith(
+                result.splitlines(),
+                'You need to specify one of alarm ID and alarm name(--name) '
+                'to update an alarm.')
+
+            params = "delete %s" % name
+            result = self.aodh('alarm', params=params)
+            self.assertEqual("", result)
+
+            params = "create --type event --name %s" % name
+            result = self.aodh('alarm', params=params)
+            alarm_id = self.details_multiple(result)[0]['alarm_id']
+
+            params = "delete %s" % alarm_id
+            result = self.aodh('alarm', params=params)
+            self.assertEqual("", result)
+
+        _test(str(uuid.uuid4()))
+        _test('normal-alarm-name')
+
     def test_event_scenario(self):
 
         PROJECT_ID = str(uuid.uuid4())
@@ -41,15 +105,6 @@ class AodhClientTest(base.ClientTestBase):
         ALARM_ID = alarm['alarm_id']
         self.assertEqual('ev_alarm1', alarm['name'])
         self.assertEqual('*', alarm['event_type'])
-
-        # CREATE FAIL
-        result = self.aodh(u'alarm',
-                           params=(u"create --type event --name ev_alarm1 "
-                                   "--project-id %s" % PROJECT_ID),
-                           fail_ok=True, merge_stderr=True)
-        self.assertFirstLineStartsWith(
-            result.splitlines(),
-            "Alarm with name='ev_alarm1' exists (HTTP 409)")
 
         # UPDATE IGNORE INVALID
         result = self.aodh(
@@ -77,7 +132,7 @@ class AodhClientTest(base.ClientTestBase):
 
         # GET BY NAME
         result = self.aodh(
-            'alarm', params="show --alarm-name ev_alarm1")
+            'alarm', params="show --name ev_alarm1")
         alarm_show = self.details_multiple(result)[0]
         self.assertEqual(ALARM_ID, alarm_show["alarm_id"])
         self.assertEqual(PROJECT_ID, alarm_show["project_id"])
@@ -87,7 +142,7 @@ class AodhClientTest(base.ClientTestBase):
         # GET BY NAME AND ID ERROR
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
-                          params=(u"show %s --alarm-name ev_alarm1" %
+                          params=(u"show %s --name ev_alarm1" %
                                   ALARM_ID))
 
         # LIST
@@ -159,16 +214,6 @@ class AodhClientTest(base.ClientTestBase):
         self.assertEqual('5.0', alarm['threshold'])
         self.assertIsNotNone(alarm['time_constraints'])
 
-        # CREATE FAIL
-        result = self.aodh(u'alarm',
-                           params=(u"create --type threshold --name alarm_th "
-                                   "-m meter_name --threshold 5 "
-                                   "--project-id %s" % PROJECT_ID),
-                           fail_ok=True, merge_stderr=True)
-        self.assertFirstLineStartsWith(
-            result.splitlines(),
-            "Alarm with name='alarm_th' exists (HTTP 409)")
-
         # CREATE FAIL MISSING PARAM
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
@@ -196,7 +241,7 @@ class AodhClientTest(base.ClientTestBase):
 
         # GET BY NAME
         result = self.aodh(
-            'alarm', params="show --alarm-name alarm_th")
+            'alarm', params="show --name alarm_th")
         alarm_show = self.details_multiple(result)[0]
         self.assertEqual(ALARM_ID, alarm_show["alarm_id"])
         self.assertEqual(PROJECT_ID, alarm_show["project_id"])
@@ -207,7 +252,7 @@ class AodhClientTest(base.ClientTestBase):
         # GET BY NAME AND ID ERROR
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
-                          params=(u"show %s --alarm-name alarm_th" %
+                          params=(u"show %s --name alarm_th" %
                                   ALARM_ID))
 
         # LIST
@@ -220,6 +265,46 @@ class AodhClientTest(base.ClientTestBase):
             self.assertEqual(sorted(output_colums), sorted(alarm_list.keys()))
             if alarm_list["alarm_id"] == ALARM_ID:
                 self.assertEqual('alarm_th', alarm_list['name'])
+
+        # LIST WITH PAGINATION
+        # list with limit
+        result = self.aodh('alarm',
+                           params="list --limit 1")
+        alarm_list = self.parser.listing(result)
+        self.assertEqual(1, len(alarm_list))
+        # list with sort with key=name dir=asc
+        result = self.aodh('alarm',
+                           params="list --sort name:asc")
+        names = [r['name'] for r in self.parser.listing(result)]
+        sorted_name = sorted(names)
+        self.assertEqual(sorted_name, names)
+        # list with sort with key=name dir=asc and key=alarm_id dir=asc
+        result = self.aodh(u'alarm',
+                           params=(u"create --type threshold --name alarm_th "
+                                   "-m meter_name --threshold 5 "
+                                   "--project-id %s" % PROJECT_ID))
+        created_alarm_id = self.details_multiple(result)[0]['alarm_id']
+        result = self.aodh('alarm',
+                           params="list --sort name:asc --sort alarm_id:asc")
+        alarm_list = self.parser.listing(result)
+        ids_with_same_name = []
+        names = []
+        for alarm in alarm_list:
+            names.append(['alarm_name'])
+            if alarm['name'] == 'alarm_th':
+                ids_with_same_name.append(alarm['alarm_id'])
+        sorted_ids = sorted(ids_with_same_name)
+        sorted_names = sorted(names)
+        self.assertEqual(sorted_names, names)
+        self.assertEqual(sorted_ids, ids_with_same_name)
+        # list with sort with key=name dir=desc and with the marker equal to
+        # the alarm_id of the alarm_th we created for this test.
+        result = self.aodh('alarm',
+                           params="list --sort name:desc "
+                                  "--marker %s" % created_alarm_id)
+        self.assertIn('alarm_tc',
+                      [r['name'] for r in self.parser.listing(result)])
+        self.aodh('alarm', params="delete %s" % created_alarm_id)
 
         # LIST WITH QUERY
         result = self.aodh('alarm',
@@ -269,22 +354,6 @@ class AodhClientTest(base.ClientTestBase):
         self.assertEqual('composite', alarm['type'])
         self.assertIn('composite_rule', alarm)
 
-        # CREATE FAIL
-        result = self.aodh(u'alarm',
-                           params=(u'create --type composite --name calarm1 '
-                                   ' --composite-rule \'{"or":[{"threshold"'
-                                   ': 0.8,"meter_name": "cpu_util",'
-                                   '"type": "threshold"},{"and": ['
-                                   '{"threshold": 200, "meter_name": '
-                                   '"disk.iops", "type": "threshold"},'
-                                   '{"threshold": 1000,"meter_name":'
-                                   '"network.incoming.packets.rate",'
-                                   '"type": "threshold"}]}]}\' '
-                                   '--project-id %s' % project_id),
-                           fail_ok=True, merge_stderr=True)
-        self.assertFirstLineStartsWith(
-            result.splitlines(), "Alarm with name='calarm1' exists (HTTP 409)")
-
         # CREATE FAIL MISSING PARAM
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
@@ -308,7 +377,7 @@ class AodhClientTest(base.ClientTestBase):
 
         # GET BY NAME
         result = self.aodh(
-            'alarm', params="show --alarm-name calarm1")
+            'alarm', params="show --name calarm1")
         alarm_show = self.details_multiple(result)[0]
         self.assertEqual(alarm_id, alarm_show["alarm_id"])
         self.assertEqual(project_id, alarm_show["project_id"])
@@ -317,7 +386,7 @@ class AodhClientTest(base.ClientTestBase):
         # GET BY NAME AND ID ERROR
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
-                          params=(u"show %s --alarm-name calarm1" %
+                          params=(u"show %s --name calarm1" %
                                   alarm_id))
 
         # LIST
@@ -357,6 +426,77 @@ class AodhClientTest(base.ClientTestBase):
         result = self.aodh('alarm', params="list")
         self.assertNotIn(alarm_id,
                          [r['alarm_id'] for r in self.parser.listing(result)])
+
+    def _test_alarm_create_show_query(self, create_params, expected_lines):
+
+        def test(params):
+            result = self.aodh('alarm', params=params)
+            alarm = self.details_multiple(result)[0]
+            for key, value in six.iteritems(expected_lines):
+                self.assertEqual(value, alarm[key])
+            return alarm
+
+        alarm = test(create_params)
+        params = 'show %s' % alarm['alarm_id']
+        test(params)
+        self.aodh('alarm', params='delete %s' % alarm['alarm_id'])
+
+    def test_threshold_alarm_create_show_query(self):
+        params = ('create --type threshold --name alarm-multiple-query '
+                  '-m cpu_util --threshold 90 --query "project_id=123;'
+                  'resource_id=456"')
+        expected_lines = {
+            'query': 'project_id = 123 AND',
+            '': 'resource_id = 456'
+        }
+        self._test_alarm_create_show_query(params, expected_lines)
+
+        params = ('create --type threshold --name alarm-single-query '
+                  '-m cpu_util --threshold 90 --query project_id=123')
+        expected_lines = {'query': 'project_id = 123'}
+        self._test_alarm_create_show_query(params, expected_lines)
+
+        params = ('create --type threshold --name alarm-no-query '
+                  '-m cpu_util --threshold 90')
+        self._test_alarm_create_show_query(params, {'query': ''})
+
+    def test_event_alarm_create_show_query(self):
+        params = ('create --type event --name alarm-multiple-query '
+                  '--query "traits.project_id=789;traits.resource_id=012"')
+        expected_lines = {
+            'query': 'traits.project_id = 789 AND',
+            '': 'traits.resource_id = 012',
+        }
+        self._test_alarm_create_show_query(params, expected_lines)
+
+        params = ('create --type event --name alarm-single-query '
+                  '--query "traits.project_id=789"')
+        expected_lines = {'query': 'traits.project_id = 789'}
+        self._test_alarm_create_show_query(params, expected_lines)
+
+        params = 'create --type event --name alarm-no-query'
+        self._test_alarm_create_show_query(params, {'query': ''})
+
+    def test_set_get_alarm_state(self):
+        result = self.aodh(
+            'alarm',
+            params=("create --type threshold --name alarm_state_test "
+                    "-m meter_name --threshold 5"))
+        alarm = self.details_multiple(result)[0]
+        alarm_id = alarm['alarm_id']
+        result = self.aodh(
+            'alarm', params="show %s" % alarm_id)
+        alarm_show = self.details_multiple(result)[0]
+        self.assertEqual('insufficient data', alarm_show['state'])
+        result = self.aodh('alarm', params="state get %s" % alarm_id)
+        state_get = self.details_multiple(result)[0]
+        self.assertEqual('insufficient data', state_get['state'])
+        self.aodh('alarm',
+                  params="state set --state ok  %s" % alarm_id)
+        result = self.aodh('alarm', params="state get %s" % alarm_id)
+        state_get = self.details_multiple(result)[0]
+        self.assertEqual('ok', state_get['state'])
+        self.aodh('alarm', params='delete %s' % alarm_id)
 
 
 class AodhClientGnocchiRulesTest(base.ClientTestBase):
@@ -398,21 +538,6 @@ class AodhClientGnocchiRulesTest(base.ClientTestBase):
                          alarm['resource_id'])
         self.assertEqual('instance', alarm['resource_type'])
 
-        # CREATE FAIL
-        result = self.aodh(u'alarm',
-                           params=(u"create "
-                                   "--type gnocchi_resources_threshold "
-                                   "--name alarm_gn1 --metric cpu_util "
-                                   "--threshold 80 "
-                                   "--resource-id %s --resource-type instance "
-                                   "--aggregation-method last "
-                                   "--project-id %s"
-                                   % (RESOURCE_ID, PROJECT_ID)),
-                           fail_ok=True, merge_stderr=True)
-        self.assertFirstLineStartsWith(
-            result.splitlines(),
-            "Alarm with name='alarm_gn1' exists (HTTP 409)")
-
         # CREATE FAIL MISSING PARAM
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
@@ -448,7 +573,7 @@ class AodhClientGnocchiRulesTest(base.ClientTestBase):
 
         # GET BY NAME
         result = self.aodh(
-            'alarm', params="show --alarm-name alarm_gn1")
+            'alarm', params="show --name alarm_gn1")
         self.assertEqual(ALARM_ID, alarm_show["alarm_id"])
         self.assertEqual(PROJECT_ID, alarm_show["project_id"])
         self.assertEqual('alarm_gn1', alarm_show['name'])
@@ -461,7 +586,7 @@ class AodhClientGnocchiRulesTest(base.ClientTestBase):
         # GET BY NAME AND ID ERROR
         self.assertRaises(exceptions.CommandFailed,
                           self.aodh, u'alarm',
-                          params=(u"show %s --alarm-name alarm_gn1" %
+                          params=(u"show %s --name alarm_gn1" %
                                   ALARM_ID))
 
         # LIST
@@ -527,22 +652,6 @@ class AodhClientGnocchiRulesTest(base.ClientTestBase):
         self.assertEqual('instance', alarm['resource_type'])
         self.assertEqual('{"=": {"server_group": "my_group"}}',
                          alarm['query'])
-
-        # CREATE FAIL
-        result = self.aodh(
-            u'alarm',
-            params=(u"create "
-                    "--type "
-                    "gnocchi_aggregation_by_resources_threshold "
-                    "--name alarm1 --metric cpu --threshold 80 "
-                    "--query "
-                    '\'{"=": {"server_group": "my_group"}}\' '
-                    "--resource-type instance "
-                    "--aggregation-method last "
-                    "--project-id %s" % PROJECT_ID),
-            fail_ok=True, merge_stderr=True)
-        self.assertFirstLineStartsWith(
-            result.splitlines(), "Alarm with name='alarm1' exists (HTTP 409)")
 
         # CREATE FAIL MISSING PARAM
         self.assertRaises(
@@ -636,22 +745,6 @@ class AodhClientGnocchiRulesTest(base.ClientTestBase):
         self.assertEqual(metrics, alarm['metrics'])
         self.assertEqual('80.0', alarm['threshold'])
         self.assertEqual('last', alarm['aggregation_method'])
-
-        # CREATE FAIL
-        result = self.aodh(
-            u'alarm',
-            params=(u"create "
-                    "--type gnocchi_aggregation_by_metrics_threshold "
-                    "--name alarm1 "
-                    "--metrics %s "
-                    "--metrics %s "
-                    "--threshold 80 "
-                    "--aggregation-method last "
-                    "--project-id %s"
-                    % (METRIC1, METRIC2, PROJECT_ID)),
-            fail_ok=True, merge_stderr=True)
-        self.assertFirstLineStartsWith(
-            result.splitlines(), "Alarm with name='alarm1' exists (HTTP 409)")
 
         # CREATE FAIL MISSING PARAM
         self.assertRaises(

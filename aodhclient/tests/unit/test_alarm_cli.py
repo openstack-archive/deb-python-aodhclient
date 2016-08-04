@@ -61,8 +61,22 @@ class CliAlarmCreateTest(testtools.TestCase):
             ])
         self.cli_alarm_create._validate_args(test_parsed_args)
         mock_arg.assert_called_once_with(
-            'threshold alarm requires -m/--meter-name and '
-            '--threshold parameters')
+            'Threshold alarm requires -m/--meter-name and '
+            '--threshold parameters. Meter name can be '
+            'found in Ceilometer')
+
+    @mock.patch.object(argparse.ArgumentParser, 'error')
+    def test_validate_args_composite(self, mock_arg):
+        # Cover the test case of the method _validate_args for
+        # composite
+        parser = self.cli_alarm_create.get_parser('aodh alarm create')
+        test_parsed_args = parser.parse_args([
+            '--name', 'composite_test',
+            '--type', 'composite'
+            ])
+        self.cli_alarm_create._validate_args(test_parsed_args)
+        mock_arg.assert_called_once_with(
+            'Composite alarm requires --composite-rule parameter')
 
     @mock.patch.object(argparse.ArgumentParser, 'error')
     def test_validate_args_gno_agg_by_resources_threshold(self, mock_arg):

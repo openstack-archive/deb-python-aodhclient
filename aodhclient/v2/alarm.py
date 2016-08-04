@@ -11,8 +11,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from debtcollector import removals
 from oslo_serialization import jsonutils
 
+from aodhclient import utils
 from aodhclient.v2.alarm_cli import ALARM_TYPES
 from aodhclient.v2 import base
 
@@ -29,29 +31,61 @@ class AlarmManager(base.Manager):
             urls.append(url)
         return '&'.join(urls)
 
-    def list(self, query=None, filters=None):
+    @removals.removed_kwarg('query',
+                            message='Calling list() with query parameter'
+                                    'is deprecated, and will be removed'
+                                    'in python-aodhclient 0.7.0, please '
+                                    'use query() instead.')
+    def list(self, filters=None, query=None, limit=None,
+             marker=None, sorts=None):
         """List alarms.
 
-        :param query: A json format complex query expression, like this:
-                      '{"=":{"type":"threshold"}}', this expression is used to
-                      query all the threshold type alarms.
-        :type query: json
         :param filters: A dict includes filters parameters, for example,
                         {'type': 'threshold', 'severity': 'low'} represent
                         filters to query alarms with type='threshold' and
                         severity='low'.
         :type filters: dict
+        :param query: A json format complex query expression, like this:
+              '{"=":{"type":"threshold"}}', this expression is used to
+              query all the threshold type alarms.
+        :type query: js
+        :param limit: maximum number of resources to return
+        :type limit: int
+        :param marker: the last item of the previous page; we return the next
+                       results after this value.
+        :type marker: str
+        :param sorts: list of resource attributes to order by.
+        :type sorts: list of str
         """
         if query:
-            query = {'filter': query}
-            url = "v2/query/alarms"
-            return self._post(url,
-                              headers={'Content-Type': "application/json"},
-                              data=jsonutils.dumps(query)).json()
-        else:
-            url = (self.url + '?' + self._filtersdict_to_url(filters) if
-                   filters else self.url)
-            return self._get(url).json()
+            return query(query)
+
+        pagination = utils.get_pagination_options(limit, marker, sorts)
+        filter_string = (self._filtersdict_to_url(filters) if
+                         filters else "")
+        url = self.url
+        options = []
+        if filter_string:
+            options.append(filter_string)
+        if pagination:
+            options.append(pagination)
+        if options:
+            url += "?" + "&".join(options)
+        return self._get(url).json()
+
+    def query(self, query=None):
+        """Query alarms.
+
+        :param query: A json format complex query expression, like this:
+                      '{"=":{"type":"threshold"}}', this expression is used to
+                      query all the threshold type alarms.
+        :type query: json
+        """
+        query = {'filter': query}
+        url = "v2/query/alarms"
+        return self._post(url,
+                          headers={'Content-Type': "application/json"},
+                          data=jsonutils.dumps(query)).json()
 
     def get(self, alarm_id):
         """Get an alarm
@@ -128,3 +162,24 @@ class AlarmManager(base.Manager):
         :type alarm_id: str
         """
         self._delete(self.url + '/' + alarm_id)
+
+    def get_state(self, alarm_id):
+        """Get the state of an alarm
+
+        :param alarm_id: ID of the alarm
+        :type alarm_id: str
+        """
+        return self._get(self.url + '/' + alarm_id + '/state').json()
+
+    def set_state(self, alarm_id, state):
+        """Set the state of an alarm
+
+        :param alarm_id: ID of the alarm
+        :type alarm_id: str
+        :param state: the state to be updated to the alarm
+        :type state: str
+        """
+        return self._put(self.url + '/' + alarm_id + '/state',
+                         headers={'Content-Type': "application/json"},
+                         data='"%s"' % state
+                         ).json()
