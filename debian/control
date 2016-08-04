@@ -15,7 +15,7 @@ Build-Depends: debhelper (>= 9),
                python3-setuptools,
 Build-Depends-Indep: python-cliff (>= 1.14.0),
                      python-coverage,
-                     python-hacking,
+                     python-debtcollector,
                      python-keystoneauth1 (>= 1.0.0),
                      python-keystonemiddleware,
                      python-mock (>= 1.2),
@@ -29,6 +29,7 @@ Build-Depends-Indep: python-cliff (>= 1.14.0),
                      python-testscenarios,
                      python-testtools (>= 1.4.0),
                      python3-cliff (>= 1.14.0),
+                     python3-debtcollector,
                      python3-keystoneauth1 (>= 1.0.0),
                      python3-keystonemiddleware,
                      python3-mock (>= 1.2),
@@ -52,6 +53,7 @@ XS-Testsuite: autopkgtest
 Package: python-aodhclient
 Architecture: all
 Depends: python-cliff (>= 1.14.0),
+         python-debtcollector,
          python-keystoneauth1 (>= 1.0.0),
          python-oslo.i18n (>= 1.5.0),
          python-oslo.serialization (>= 1.4.0),
@@ -74,6 +76,7 @@ Description: OpenStack Alarming as a Service - Python 2.7 client
 Package: python3-aodhclient
 Architecture: all
 Depends: python3-cliff (>= 1.14.0),
+         python3-debtcollector,
          python3-keystoneauth1 (>= 1.0.0),
          python3-oslo.i18n (>= 1.5.0),
          python3-oslo.serialization (>= 1.4.0),
