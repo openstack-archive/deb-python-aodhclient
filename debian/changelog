@@ -1,4 +1,4 @@
-python-aodhclient (0.5.0-1) UNRELEASED; urgency=medium
+python-aodhclient (0.6.0-1) UNRELEASED; urgency=medium
 
   [ Ondřej Nový ]
   * Standards-Version is 3.9.8 now (no change)
@@ -10,7 +10,7 @@ python-aodhclient (0.5.0-1) UNRELEASED; urgency=medium
   * d/gbp.conf: Update debian-branch for Newton.
   * d/tests/*: Test python2-aodh and python3-aodh clients and exit on error.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Mon, 27 Jun 2016 08:28:49 -0400
+ -- Corey Bryant <corey.bryant@canonical.com>  Thu, 04 Aug 2016 08:04:46 -0400
 
 python-aodhclient (0.3.0-2) unstable; urgency=medium
 
