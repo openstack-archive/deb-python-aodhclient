@@ -1,0 +1,11 @@
+Code-Review+2: Julien Danjou <julien@danjou.info>
+Code-Review+1: Rushi Agrawal <rushi.openstack@gmail.com>
+Code-Review+1: Swami Reddy <swamireddy@gmail.com>
+Code-Review+2: liusheng <liusheng2048@gmail.com>
+Workflow+1: liusheng <liusheng2048@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 26 Jul 2016 12:30:30 +0000
+Reviewed-on: https://review.openstack.org/345563
+Project: openstack/deb-python-aodhclient
+Branch: refs/heads/master
