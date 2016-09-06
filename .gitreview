@@ -1,4 +1,5 @@
 [gerrit]
 host=review.openstack.org
 port=29418
-project=openstack/python-aodhclient.git
+project=openstack/deb-python-aodhclient.git
+defaultbranch=debian/newton
