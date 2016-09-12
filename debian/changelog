@@ -1,4 +1,4 @@
-python-aodhclient (0.6.0-1) UNRELEASED; urgency=medium
+python-aodhclient (0.7.0-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Standards-Version is 3.9.8 now (no change)
@@ -10,7 +10,10 @@ python-aodhclient (0.6.0-1) UNRELEASED; urgency=medium
   * d/gbp.conf: Update debian-branch for Newton.
   * d/tests/*: Test python2-aodh and python3-aodh clients and exit on error.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Thu, 04 Aug 2016 08:04:46 -0400
+  [ Thomas Goirand ]
+  * Using OpenStack's Gerrit as VCS URLs.
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 13 Sep 2016 10:05:35 +0200
 
 python-aodhclient (0.3.0-2) unstable; urgency=medium
 
