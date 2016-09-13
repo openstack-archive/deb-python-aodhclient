@@ -1,0 +1,11 @@
+Code-Review+1: venkatamahesh <Venkata.Kotha@infinite.com>
+Code-Review+2: Julien Danjou <julien@danjou.info>
+Workflow+1: Julien Danjou <julien@danjou.info>
+Code-Review+2: gordon chung <gord@live.ca>
+Workflow+1: gordon chung <gord@live.ca>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 13 Sep 2016 13:24:07 +0000
+Reviewed-on: https://review.openstack.org/364925
+Project: openstack/deb-python-aodhclient
+Branch: refs/heads/stable/newton
