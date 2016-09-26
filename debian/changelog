@@ -1,6 +1,11 @@
 python-aodhclient (0.7.0-2) UNRELEASED; urgency=medium
 
+  [ Thomas Goirand ]
   * Using pkgos-dh_auto_install from openstack-pkg-tools >= 52~.
+
+  [ Ondřej Nový ]
+  * d/s/options: extend-diff-ignore of .gitreview
+  * d/control: Use correct branch in Vcs-* fields
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 13 Sep 2016 17:39:06 +0200
 

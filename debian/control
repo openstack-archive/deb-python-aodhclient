@@ -45,8 +45,8 @@ Build-Depends-Indep: python-cliff (>= 1.14.0),
                      subunit,
                      testrepository,
 Standards-Version: 3.9.8
-Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-aodhclient.git/
-Vcs-Git: https://git.openstack.org/openstack/deb-python-aodhclient.git
+Vcs-Browser: https://git.openstack.org/cgit/openstack/deb-python-aodhclient.git/?h=debian%2Fnewton
+Vcs-Git: https://git.openstack.org/openstack/deb-python-aodhclient.git -b debian/newton
 Homepage: http://www.openstack.org
 XS-Testsuite: autopkgtest
 
