@@ -1,0 +1,9 @@
+Code-Review+2: Julien Danjou <julien@danjou.info>
+Workflow+1: Julien Danjou <julien@danjou.info>
+Workflow+1: gordon chung <gord@live.ca>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 18 May 2017 21:27:55 +0000
+Reviewed-on: https://review.openstack.org/465155
+Project: openstack/deb-python-aodhclient
+Branch: refs/heads/master
