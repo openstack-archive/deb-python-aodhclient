@@ -1,6 +1,0 @@
-[run]
-branch = True
-source = aodhclient
-
-[report]
-ignore_errors = True
